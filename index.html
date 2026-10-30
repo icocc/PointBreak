@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pointbreak</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&family=Share+Tech+Mono&family=Space+Grotesk:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #000000;
+    --fg: #ffffff;
+    --accent: #ff3333;
+    --dim: rgba(255, 255, 255, 0.5);
+    --border: rgba(255, 255, 255, 0.15);
+    --font-main: 'Inter', sans-serif;
+    --font-mono: 'Share Tech Mono', monospace;
+    --font-display: 'Space Grotesk', sans-serif;
+    --smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-main);
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+  }
+
+  /* ============ SIDE NAVIGATION DOTS ============ */
+  .side-dots {
+    position: fixed;
+    right: 30px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 1s var(--smooth);
+    pointer-events: none;
+  }
+  .side-dots.show { opacity: 1; pointer-events: auto; }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    cursor: pointer;
+    transition: all 0.4s var(--smooth);
+    position: relative;
+  }
+
+  .dot:hover { background: rgba(255,255,255,0.5); }
+  .dot.active { background: #fff; transform: scale(1.5); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
+  
+  /* Tooltip on hover */
+  .dot::after {
+    content: attr(data-label);
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: #fff;
+    background: rgba(0,0,0,0.8);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.2);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    white-space: nowrap;
+  }
+  .dot:hover::after { opacity: 1; }
+
+  /* ============ SCROLL ENGINE ============ */
+  .scroll-container {
+    height: 100vh;
+    width: 100vw;
+    transition: transform 1s var(--smooth);
+    will-change: transform;
+  }
+
+  .page-section {
+    height: 100vh;
+    width: 100vw;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  /* ============ BACKGROUND LAYERS ============ */
+  .bg-main {
+    position: fixed; inset: -40px;
+    background-image: url('bg.jpg'); background-size: cover; background-position: center;
+    z-index: -6; filter: blur(15px) brightness(0.2) grayscale(0.5);
+  }
+  .bg-members-gif {
+    position: fixed; inset: -40px;
+    background-image: url('bg.gif'); background-size: cover; background-position: center;
+    z-index: -5; filter: blur(25px) brightness(0.25) grayscale(0.3);
+    opacity: 0; transition: opacity 1s var(--smooth), background-image 0.5s ease;
+  }
+  body.show-member-bg .bg-members-gif { opacity: 1; }
+
+  .bg-grid {
+    position: fixed; inset: 0; z-index: -4; pointer-events: none;
+    background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 80px 80px;
+    mask-image: radial-gradient(circle at center, black 30%, transparent 90%);
+    -webkit-mask-image: radial-gradient(circle at center, black 30%, transparent 90%);
+  }
+  .bg-vignette {
+    position: fixed; inset: 0;
+    background: radial-gradient(circle at center, rgba(0,0,0,0) 0%, rgba(0,0,0,0.8) 100%);
+    z-index: -3; pointer-events: none;
+  }
+
+  /* ============ BOOT SCREEN ============ */
+  #boot-screen {
+    position: fixed; inset: 0; background: #050505; z-index: 999;
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding-left: 10vw;
+    font-family: var(--font-mono); transition: opacity 1s var(--smooth), filter 1s var(--smooth);
+  }
+  #boot-screen.hide { opacity: 0; filter: blur(10px); pointer-events: none; }
+
+  .boot-log { font-size: 14px; color: var(--dim); line-height: 1.8; min-height: 250px; }
+  .boot-log .ok { color: var(--accent); font-weight: bold; }
+  .boot-log .line { opacity: 0; display: block; white-space: pre-wrap; }
+
+  .interactive-prompt { display: none; align-items: center; gap: 10px; font-size: 16px; color: var(--fg); margin-top: 10px; }
+  .interactive-prompt input {
+    background: transparent; border: none; color: var(--accent);
+    font-family: var(--font-mono); font-size: 16px; outline: none;
+    letter-spacing: 4px; text-transform: uppercase; width: 150px; caret-color: var(--fg);
+  }
+
+  /* ============ PAGE 1: HERO ============ */
+  .hero-content { position: relative; z-index: 10; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 20px; }
+  .logo-container { width: clamp(280px, 60vw, 600px); margin-bottom: 20px; animation: floatLogo 6s ease-in-out infinite; }
+  @keyframes floatLogo { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+  .logo-container img { width: 100%; height: auto; display: block; filter: drop-shadow(0 0 30px rgba(0, 0, 0, 0.9)); }
+  .subtitle { font-family: var(--font-mono); font-size: clamp(14px, 2vw, 16px); letter-spacing: 6px; text-transform: uppercase; color: var(--dim); }
+  
+  .scroll-hint {
+    position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px;
+    color: var(--dim); text-transform: uppercase; animation: bounce 2s infinite;
+  }
+  @keyframes bounce { 0%, 20%, 50%, 80%, 100% { transform: translateX(-50%) translateY(0); } 40% { transform: translateX(-50%) translateY(-10px); } 60% { transform: translateX(-50%) translateY(-5px); } }
+
+  /* ============ PAGE 2: ABOUT ============ */
+  .about-content { z-index: 10; max-width: 600px; padding: 40px; text-align: left; font-family: var(--font-mono); background: rgba(5,5,5,0.85); border: 1px solid var(--border); backdrop-filter: blur(8px); }
+  .terminal-header { border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 20px; display: flex; gap: 8px; }
+  .terminal-dot { width: 10px; height: 10px; border-radius: 50%; background: #333; }
+  .terminal-dot.red { background: #ff5f56; } .terminal-dot.yellow { background: #ffbd2e; } .terminal-dot.green { background: #27c93f; }
+  .about-text { font-size: 14px; line-height: 1.8; color: var(--dim); margin-bottom: 30px; }
+  .about-text strong { color: var(--fg); font-size: 16px; letter-spacing: 2px; }
+  .command-line { background: rgba(255, 255, 255, 0.1); display: inline-block; padding: 6px 12px; color: #fff; font-weight: bold; margin-bottom: 20px; }
+  .cursor { display: inline-block; width: 8px; height: 14px; background: var(--fg); margin-left: 4px; vertical-align: text-bottom; animation: blink 1s step-end infinite; }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  .discord-btn { display: inline-flex; align-items: center; gap: 12px; background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); color: var(--fg); text-decoration: none; font-family: var(--font-mono); font-size: 14px; letter-spacing: 2px; padding: 16px 32px; border: 1px solid var(--border); transition: all 0.4s var(--smooth); margin-top: 20px; }
+  .discord-btn:hover { background: rgba(255,255,255,0.1); border-color: var(--fg); transform: translateY(-4px); }
+
+  /* ============ PAGE 3: AUDIO ============ */
+  .audio-content { z-index: 10; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 30px; }
+  .album-wrapper { position: relative; width: 300px; height: 300px; display: flex; justify-content: center; align-items: center; }
+  .album-cover { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 20px 50px rgba(0,0,0,0.9); position: relative; z-index: 2; }
+  .vinyl-record { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 290px; height: 290px; background: repeating-radial-gradient(#111 0%, #222 5%, #111 10%); border-radius: 50%; border: 4px solid #000; z-index: 1; animation: spin 4s linear infinite; animation-play-state: paused; }
+  .vinyl-record::after { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 60px; height: 60px; background: var(--bg); border-radius: 50%; border: 2px solid #333; }
+  @keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+  .track-title { font-family: var(--font-mono); font-size: 20px; letter-spacing: 4px; text-transform: uppercase; color: var(--fg); }
+  .track-artist { font-family: var(--font-mono); font-size: 12px; letter-spacing: 3px; color: var(--dim); margin-top: 5px; }
+  .play-btn { background: transparent; border: 1px solid var(--border); color: var(--fg); width: 64px; height: 64px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: all 0.3s var(--smooth); margin-top: 15px; padding: 0; }
+  .play-btn:hover { background: rgba(255,255,255,0.1); border-color: var(--fg); transform: scale(1.05); }
+  .play-btn svg { width: 24px; height: 24px; fill: var(--fg); display: block; }
+
+  /* ============ PAGE 4: MEMBERS ============ */
+  .members-layout { display: flex; width: 90%; max-width: 1200px; height: 100%; align-items: center; justify-content: space-between; padding: 0 5vw; z-index: 10; }
+
+  .member-container { display: flex; width: 100%; justify-content: space-between; align-items: center; transition: opacity 0.5s var(--smooth), transform 0.5s var(--smooth); cursor: pointer; }
+  .member-container.fade-out { opacity: 0; transform: translateY(10px); pointer-events: none; }
+
+  .member-profile-side { display: flex; flex-direction: column; align-items: flex-start; text-align: left; flex: 1; }
+  .avatar-wrapper { position: relative; margin-bottom: 25px; }
+  .spy-avatar { width: 110px; height: 110px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 10px 30px rgba(0,0,0,0.5); background: #111; }
+  .avatar-badge { position: absolute; top: -5px; right: -10px; background: #fff; color: #000; font-family: var(--font-mono); font-size: 9px; font-weight: bold; padding: 3px 10px; border-radius: 20px; transform: rotate(10deg); box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+  .spy-name { font-family: var(--font-display); font-size: clamp(4.5rem, 9vw, 8rem); font-weight: 200; letter-spacing: -3px; line-height: 1; color: #fff; margin-bottom: 15px; }
+  .spy-handle { font-family: var(--font-main); font-size: 14px; color: rgba(255,255,255,0.6); margin-bottom: 8px; letter-spacing: 1px; }
+  .spy-role { font-family: var(--font-mono); font-size: 10px; letter-spacing: 3px; color: rgba(255,255,255,0.4); text-transform: uppercase; margin-bottom: 15px; }
+  .spy-bio { font-family: var(--font-main); font-size: 12px; color: rgba(255,255,255,0.5); letter-spacing: 1px; font-style: italic; max-width: 300px; }
+
+  .member-card-side { position: relative; flex: 1; height: 500px; display: flex; justify-content: center; align-items: center; perspective: 1200px; }
+  .card-stack { position: relative; width: 600px; height: 360px; }
+  
+  .spy-card { position: absolute; top: 0; right: 0; width: 100%; height: 100%; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 30px 80px rgba(0,0,0,0.9); background-size: cover; background-position: center; z-index: 10; transition: background-image 0.5s; }
+  .spy-card-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 100%); z-index: 1; pointer-events: none; }
+  
+  /* GHOST HINT TEXT */
+  .ghost-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--font-mono);
+    font-size: 40px;
+    font-weight: bold;
+    color: #fff;
+    opacity: 0.05;
+    pointer-events: none;
+    text-align: center;
+    letter-spacing: 5px;
+    z-index: 2;
+  }
+
+  .spy-card-top { position: absolute; top: 15px; left: 15px; right: 15px; display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; color: rgba(255,255,255,0.6); text-transform: uppercase; z-index: 3; }
+  .spy-card-top .status { display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(4px); transition: all 0.3s; }
+  .spy-card-top .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #7d7d7d; transition: background 0.3s, box-shadow 0.3s; }
+  .status.online::before { background: #23a55a; box-shadow: 0 0 8px #23a55a; }
+  .status.idle::before { background: #f0b232; box-shadow: 0 0 8px #f0b232; }
+  .status.dnd::before { background: #f23f43; box-shadow: 0 0 8px #f23f43; }
+  .status.offline::before { background: #7d7d7d; }
+  .spy-card-top .member-id { background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(4px); }
+
+  .spy-card.back-1 { top: 15px; right: -15px; z-index: 9; transform: scale(0.96); opacity: 0.5; filter: blur(2px); background: #111; border-color: rgba(255,255,255,0.1); pointer-events: none; }
+  .spy-card.back-2 { top: 30px; right: -30px; z-index: 8; transform: scale(0.92); opacity: 0.2; filter: blur(4px); background: #111; border-color: transparent; pointer-events: none; }
+
+  .member-nav { position: absolute; bottom: -60px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; z-index: 20; align-items: center; }
+  .member-nav button { background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.3); color: #fff; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-family: var(--font-mono); font-size: 20px; display: flex; justify-content: center; align-items: center; transition: all 0.3s; backdrop-filter: blur(10px); }
+  .member-nav button:hover { background: #fff; color: #000; transform: scale(1.1); }
+
+  /* ============ PAGE 5: AFFILIATIONS ============ */
+  .affiliations-content { z-index: 10; display: flex; flex-direction: column; align-items: center; gap: 30px; max-width: 1000px; width: 100%; padding: 0 20px; }
+  .affil-title { font-family: var(--font-mono); font-size: 14px; letter-spacing: 6px; color: var(--dim); text-transform: uppercase; margin-bottom: 10px; }
+  
+  .affil-grid { display: flex; justify-content: center; flex-wrap: wrap; gap: 20px; width: 100%; }
+
+  .affil-card {
+    width: 280px;
+    background: rgba(10, 10, 10, 0.6);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 30px;
+    text-align: center;
+    backdrop-filter: blur(10px);
+    transition: all 0.4s var(--smooth);
+    text-decoration: none;
+    display: flex; flex-direction: column; align-items: center; gap: 15px;
+  }
+  .affil-card:hover { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.4); transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+
+  .affil-icon-img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.1); }
+  .affil-name { font-family: var(--font-main); font-size: 18px; font-weight: 600; color: #fff; letter-spacing: 1px; margin-top: 5px; }
+  
+  .affil-stats { display: flex; gap: 15px; font-family: var(--font-mono); font-size: 11px; color: var(--dim); letter-spacing: 1px; margin-top: 5px; }
+  .affil-stat { display: flex; align-items: center; gap: 6px; }
+  .stat-dot { width: 8px; height: 8px; border-radius: 50%; background: #23a55a; }
+  .stat-dot.member { background: #7d7d7d; }
+</style>
+</head>
+<body>
+
+<audio id="bg-music" src="bgm.mp3" loop></audio>
+
+<div class="bg-main"></div>
+<div class="bg-members-gif" id="page-bg-gif"></div>
+<div class="bg-grid"></div>
+<div class="bg-vignette"></div>
+
+<div class="side-dots" id="side-dots"></div>
+
+<div id="boot-screen">
+  <div class="boot-log" id="boot-log"></div>
+  <div class="interactive-prompt" id="interactive-prompt">
+    root@pointbreak:~# <input type="text" id="terminal-input" autocomplete="off" spellcheck="false" placeholder="TYPE 'RUN'">
+  </div>
+</div>
+
+<div class="scroll-container" id="scroll-container">
+  
+  <section class="page-section active" id="page-hero">
+    <div class="hero-content">
+      <div class="logo-container">
+        <img src="logo.png" alt="Pointbreak Logo" onerror="this.style.display='none'; document.querySelector('.logo-fallback').style.display='block';">
+        <div class="logo-fallback">POINTBREAK</div>
+      </div>
+      <div class="subtitle">The point where security stops.</div>
+    </div>
+    <div class="scroll-hint">Scroll to decrypt</div>
+  </section>
+
+  <section class="page-section" id="page-about">
+    <div class="about-content">
+      <div class="terminal-header">
+        <div class="terminal-dot red"></div>
+        <div class="terminal-dot yellow"></div>
+        <div class="terminal-dot green"></div>
+      </div>
+      <div class="about-text">
+        <div class="command-line">> ./pointbreak.sys <span class="cursor"></span></div>
+        <p>We don’t hack for the noise. We hack for the silence that follows.</p><br>
+        <p>Pointbreak is a collective of researchers, reverse engineers, and digital ghosts. We operate where the perimeter is softest.</p><br>
+        <p><strong>WE STAND ON BUSINESS.</strong></p>
+      </div>
+      <a href="https://discord.gg/9V3wtcvb" target="_blank" rel="noopener" class="discord-btn">
+        <svg viewBox="0 0 127.14 96.36" width="20" height="20" fill="currentColor"><path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.2,46,96.12,53,91.08,65.69,84.69,65.69Z"/></svg>
+        Join The Syndicate
+      </a>
+    </div>
+  </section>
+
+  <section class="page-section" id="page-audio">
+    <div class="audio-content">
+      <div class="album-wrapper">
+        <div class="vinyl-record" id="vinyl"></div>
+        <img src="warning-shot.jpg" alt="Warning Shot Album" class="album-cover">
+      </div>
+      <div class="audio-controls">
+        <div class="track-title">WARNING SHOT</div>
+        <div class="track-artist">POINTBREAK</div>
+        <button class="play-btn" id="play-toggle">
+          <svg id="icon-play" viewBox="0 0 24 24" style="margin-left: 4px;"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="icon-pause" viewBox="0 0 24 24" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="page-section" id="page-profiles">
+    <div class="members-layout">
+      
+      <div class="member-container" id="member-container" onclick="nextMember()">
+        
+        <div class="member-profile-side">
+          <div class="avatar-wrapper">
+            <img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Avatar" class="spy-avatar" id="m-avatar">
+            <div class="avatar-badge" id="m-badge">HEAD</div>
+          </div>
+          <h1 class="spy-name" id="m-name">Loading</h1>
+          <div class="spy-handle" id="m-handle">@loading</div>
+          <div class="spy-role" id="m-role">LOADING</div>
+          <div class="spy-bio" id="m-bio">Loading bio...</div>
+        </div>
+
+        <div class="member-card-side">
+          <div class="card-stack">
+            <div class="spy-card back-1"></div>
+            <div class="spy-card back-2"></div>
+            <div class="spy-card" id="m-card-bg">
+              <div class="spy-card-overlay"></div>
+              
+              <!-- GHOST HINT -->
+              <div class="ghost-hint">TAP TO SWAP</div>
+
+              <div class="spy-card-top">
+                <div class="status offline" id="m-status">OFFLINE</div>
+                <div class="member-id" id="m-id">MEMBER / #000</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="member-nav">
+        <button id="prev-member" onclick="event.stopPropagation(); prevMember()">&lt;</button>
+        <button id="next-member" onclick="event.stopPropagation(); nextMember()">&gt;</button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- AFFILIATIONS PAGE -->
+  <section class="page-section" id="page-affiliations">
+    <div class="affiliations-content">
+      <h2 class="affil-title">AFFILIATED NETWORKS</h2>
+      <div class="affil-grid" id="affil-grid">
+        <!-- Javascript will inject server cards here -->
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  // Audio Logic
+  const bgMusic = document.getElementById('bg-music');
+  const playToggle = document.getElementById('play-toggle');
+  const vinyl = document.getElementById('vinyl');
+  const iconPlay = document.getElementById('icon-play');
+  const iconPause = document.getElementById('icon-pause');
+  bgMusic.volume = 0.5;
+
+  function updateAudioUI(isPlaying) {
+    if (isPlaying) {
+      vinyl.style.animationPlayState = 'running';
+      iconPlay.style.display = 'none';
+      iconPause.style.display = 'block';
+    } else {
+      vinyl.style.animationPlayState = 'paused';
+      iconPlay.style.display = 'block';
+      iconPause.style.display = 'none';
+    }
+  }
+
+  playToggle.addEventListener('click', () => {
+    if (bgMusic.paused) bgMusic.play();
+    else bgMusic.pause();
+  });
+  bgMusic.addEventListener('play', () => updateAudioUI(true));
+  bgMusic.addEventListener('pause', () => updateAudioUI(false));
+
+  // ==========================================
+  // BOOT SCREEN
+  // ==========================================
+  const bootLog = document.getElementById('boot-log');
+  const terminalInput = document.getElementById('terminal-input');
+  const interactivePrompt = document.getElementById('interactive-prompt');
+  const bootScreen = document.getElementById('boot-screen');
+  const sideDotsContainer = document.getElementById('side-dots');
+
+  const lines = [
+    "Initializing Pointbreak kernel...",
+    "Bypassing mainframe firewall...",
+    "Spoofing MAC address...",
+    "Encrypting payload [AES-256]...",
+    "Hiding from local subnet...",
+    "Establishing secure tunnel...",
+    "ACCESS GRANTED."
+  ];
+
+  let currentLine = 0;
+  function runBoot() {
+    if (currentLine < lines.length) {
+      const div = document.createElement('div');
+      div.className = 'line';
+      div.innerHTML = `> ${lines[currentLine]} <span class="ok">[OK]</span>`;
+      bootLog.appendChild(div);
+      setTimeout(() => { div.style.opacity = '1'; }, 10);
+      currentLine++;
+      setTimeout(runBoot, 300);
+    } else {
+      bootLog.innerHTML += `<div class="line" style="opacity:1; margin-top: 20px;">Awaiting user input...</div>`;
+      interactivePrompt.style.display = 'flex';
+      terminalInput.focus();
+    }
+  }
+  window.addEventListener('load', () => { setTimeout(runBoot, 500); });
+
+  terminalInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const val = terminalInput.value.trim().toUpperCase();
+      if (val === 'RUN' || val === 'START') {
+        bgMusic.play().catch(e => console.log("Audio play blocked:", e));
+        bootLog.innerHTML += `<div class="line" style="opacity:1; color: var(--accent); margin-top: 10px;">> EXECUTING...</div>`;
+        interactivePrompt.style.display = 'none';
+        setTimeout(() => {
+          bootScreen.classList.add('hide');
+          setTimeout(() => {
+            sideDotsContainer.classList.add('show');
+            document.getElementById('page-hero').classList.add('active');
+          }, 400);
+        }, 500);
+      } else {
+        terminalInput.value = '';
+        terminalInput.placeholder = 'ACCESS DENIED';
+        setTimeout(() => terminalInput.placeholder = "TYPE 'RUN'", 1500);
+      }
+    }
+  });
+
+  // ==========================================
+  // MULTI-MEMBER SYSTEM & DYNAMIC BACKGROUND
+  // ==========================================
+  const squad = [
+    {
+      id: "1320410416333066283",
+      badge: "HEAD",
+      role: "HEAD // FOUNDER",
+      bio: "Akuma Raging Demon",
+      fallbackBg: "bg.gif",
+      num: "#001"
+    },
+    {
+      id: "1501159155669536798",
+      badge: "MEMBER",
+      role: "MEMBER",
+      bio: "someday you will find me caught beneath the landslide.",
+      fallbackBg: "cross.gif", 
+      num: "#002"
+    },
+    {
+      id: "1429374185263730699",
+      badge: "MEMBER",
+      role: "MEMBER",
+      bio: "asawa ni pownzi",
+      fallbackBg: "sunset.gif",
+      num: "#003"
+    }
+  ];
+
+  let currentMemberIndex = 0;
+  const memberContainer = document.getElementById('member-container');
+  const pageBgGif = document.getElementById('page-bg-gif');
+
+  const elAvatar = document.getElementById('m-avatar');
+  const elBadge = document.getElementById('m-badge');
+  const elName = document.getElementById('m-name');
+  const elHandle = document.getElementById('m-handle');
+  const elRole = document.getElementById('m-role');
+  const elBio = document.getElementById('m-bio');
+  const elCardBg = document.getElementById('m-card-bg');
+  const elStatus = document.getElementById('m-status');
+  const elId = document.getElementById('m-id');
+
+  async function loadMember(index) {
+    memberContainer.classList.add('fade-out');
+    
+    setTimeout(async () => {
+      const member = squad[index];
+      
+      elBadge.textContent = member.badge;
+      elRole.textContent = member.role;
+      elBio.textContent = member.bio;
+      elId.textContent = "MEMBER / " + member.num;
+      
+      elCardBg.style.backgroundImage = `url('${member.fallbackBg}')`;
+      pageBgGif.style.backgroundImage = `url('${member.fallbackBg}')`;
+
+      try {
+        const res = await fetch(`https://api.lanyard.rest/v1/users/${member.id}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success) {
+            const data = json.data;
+            const user = data.discord_user;
+            const status = data.discord_status || "offline";
+
+            elStatus.textContent = status.toUpperCase();
+            elStatus.className = "status " + status;
+
+            if (user.avatar) {
+              elAvatar.src = `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=256`;
+            } else {
+              elAvatar.src = `https://cdn.discordapp.com/embed/avatars/0.png`;
+            }
+            
+            elName.textContent = (user.global_name || user.username).toLowerCase();
+            elHandle.textContent = "@" + user.username;
+          }
+        } else {
+          throw new Error("Not on Lanyard");
+        }
+      } catch (e) {
+        try {
+          const res2 = await fetch(`https://japi.rest/discord/v1/user/${member.id}`);
+          if (res2.ok) {
+              const json2 = await res2.json();
+              const data2 = json2.data;
+              if (data2.avatarURL) elAvatar.src = data2.avatarURL + "?size=256";
+              else elAvatar.src = `https://cdn.discordapp.com/embed/avatars/0.png`;
+              if (data2.global_name) elName.textContent = data2.global_name.toLowerCase();
+              else elName.textContent = "unknown";
+              if (data2.username) elHandle.textContent = "@" + data2.username;
+          }
+        } catch (err) {
+           elName.textContent = "offline";
+           elHandle.textContent = "@unknown";
+        }
+        elStatus.textContent = "OFFLINE";
+        elStatus.className = "status offline";
+      }
+
+      memberContainer.classList.remove('fade-out');
+    }, 300);
+  }
+
+  function nextMember() {
+    currentMemberIndex = (currentMemberIndex + 1) % squad.length;
+    loadMember(currentMemberIndex);
+  }
+
+  function prevMember() {
+    currentMemberIndex = (currentMemberIndex - 1 + squad.length) % squad.length;
+    loadMember(currentMemberIndex);
+  }
+
+  loadMember(0);
+
+  // ==========================================
+  // AFFILIATIONS FETCHING
+  // ==========================================
+  const affiliates = [
+    "uuscpqdwUP",
+    "nostra",
+    "n2UJQWPC5S"
+  ];
+
+  async function loadAffiliations() {
+    const grid = document.getElementById('affil-grid');
+    
+    for (const inviteCode of affiliates) {
+      try {
+        const res = await fetch(`https://discord.com/api/v10/invites/${inviteCode}?with_counts=true`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        
+        const guild = data.guild;
+        if (!guild) continue;
+
+        const name = guild.name || "Unknown Server";
+        const iconHash = guild.icon;
+        const iconUrl = iconHash ? `https://cdn.discordapp.com/icons/${guild.id}/${iconHash}.png?size=128` : `https://cdn.discordapp.com/embed/avatars/0.png`;
+        
+        const members = data.approximate_member_count || 0;
+        const online = data.approximate_presence_count || 0;
+
+        // Create Card HTML
+        const card = document.createElement('a');
+        card.href = `https://discord.gg/${inviteCode}`;
+        card.target = "_blank";
+        card.className = "affil-card";
+        
+        card.innerHTML = `
+          <img src="${iconUrl}" alt="${name}" class="affil-icon-img">
+          <div class="affil-name">${name}</div>
+          <div class="affil-stats">
+            <div class="affil-stat"><div class="stat-dot"></div>${online}</div>
+            <div class="affil-stat"><div class="stat-dot member"></div>${members}</div>
+          </div>
+        `;
+        grid.appendChild(card);
+        
+      } catch (e) {
+        console.error("Failed to load affiliate", inviteCode);
+      }
+    }
+  }
+
+  loadAffiliations();
+
+  // ==========================================
+  // APP SCROLL LOGIC & SIDE DOTS
+  // ==========================================
+  const scrollContainer = document.getElementById('scroll-container');
+  const sections = document.querySelectorAll('.page-section');
+  const totalSections = sections.length;
+  const dots = [];
+
+  sections.forEach((sec, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'dot' + (i === 0 ? ' active' : '');
+    
+    let label = "";
+    if (i === 0) label = "HOME";
+    else if (i === 1) label = "INTEL";
+    else if (i === 2) label = "AUDIO";
+    else if (i === 3) label = "MEMBERS";
+    else if (i === 4) label = "AFFILIATIONS";
+    dot.setAttribute('data-label', label);
+
+    dot.addEventListener('click', () => goToSection(i));
+    sideDotsContainer.appendChild(dot);
+    dots.push(dot);
+  });
+
+  let currentIndex = 0;
+  let isAnimating = false;
+
+  function goToSection(index) {
+    if (index < 0 || index >= totalSections || isAnimating) return;
+    
+    isAnimating = true;
+    currentIndex = index;
+
+    scrollContainer.style.transform = `translateY(-${index * 100}vh)`;
+
+    sections.forEach(s => s.classList.remove('active'));
+    sections[currentIndex].classList.add('active');
+
+    dots.forEach(d => d.classList.remove('active'));
+    if(dots[currentIndex]) dots[currentIndex].classList.add('active');
+
+    if (index === 3) {
+      document.body.classList.add('show-member-bg');
+    } else {
+      document.body.classList.remove('show-member-bg');
+    }
+
+    setTimeout(() => { isAnimating = false; }, 1000);
+  }
+
+  window.addEventListener('wheel', (e) => {
+    if (!bootScreen.classList.contains('hide')) return;
+    e.preventDefault();
+    if (isAnimating) return;
+
+    if (e.deltaY > 30) goToSection(currentIndex + 1);
+    else if (e.deltaY < -30) goToSection(currentIndex - 1);
+  }, { passive: false });
+
+  let touchStartY = 0;
+  window.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; }, { passive: false });
+
+  window.addEventListener('touchend', (e) => {
+    if (!bootScreen.classList.contains('hide') || isAnimating) return;
+    const touchEndY = e.changedTouches[0].clientY;
+    const distance = touchStartY - touchEndY;
+    if (distance > 50) goToSection(currentIndex + 1);
+    else if (distance < -50) goToSection(currentIndex - 1);
+  }, { passive: false });
+</script>
+</body>
+</html>
